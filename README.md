@@ -2,7 +2,7 @@
   <img src="assets/logo2.svg" alt="NopeRi" width="680"/>
 </p>
 
-# NopeRi
+# NaukriAssist
 
 One of the few fully working Naukri.com API clients — Selenium-free, with an AI-powered automated job application agent.  
 Login, search, score, and apply — all without touching a browser.
@@ -56,8 +56,8 @@ For pytest, install `requirements-dev.txt`. Live smoke tests in `tests/test_api.
 **Requirements:** Python 3.10+, Node.js 14+ (for `vid` token generation)
 
 ```bash
-git clone https://github.com/Surajpatel28/NopeRi.git
-cd NopeRi
+git clone https://github.com/Surajpatel28/NaukriAssist.git
+cd NaukriAssist
 pip install -r requirements.txt
 ```
 
