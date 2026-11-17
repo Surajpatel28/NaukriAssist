@@ -70,9 +70,10 @@ class JobFilterPipeline2:
         self.cfg = config_manager
 
         ai_cfg = self.cfg.config.get("ai", {})
+        self.data_roles = self.cfg.config.get("profile", {}).get("role_focus") == "data_science"
 
         # Explicit params override config (backward compat).
-        self.cache_file        = cache_file
+        self.cache_file        = "score_cache_data_science_v1.json" if self.data_roles and cache_file == "score_cache.json" else cache_file
         self.daily_apply_limit = daily_apply_limit if daily_apply_limit is not None else ai_cfg.get("daily_apply_limit", 50)
         self.min_apply_score   = min_apply_score   if min_apply_score   is not None else ai_cfg.get("score_threshold",   50)
         self.ai_score_limit    = ai_score_limit    if ai_score_limit    is not None else ai_cfg.get("ai_score_limit",    300)
@@ -105,6 +106,16 @@ class JobFilterPipeline2:
     # =========================================================
 
     def run(self, jobs):
+        jobs = self.filter_candidates(jobs)
+        jobs = self.ai_score_batch(jobs)
+        jobs = self.rank(jobs)
+        jobs = self.select(jobs)
+        for j in jobs:
+            print(f"  {j.get('ai_score'):>3}  {j.get('title')} @ {j.get('company')} | {j.get('ai_reason', '')}")
+        return jobs
+
+    def filter_candidates(self, jobs):
+        """Apply the same role/profile filters whether or not AI is enabled."""
         def _drop(before, after, label):
             d = before - after
             return f"{label}:{d}" if d else None
@@ -132,20 +143,6 @@ class JobFilterPipeline2:
         ]
         breakdown = "  ".join(f"-{d} {lbl}" for d, lbl in dropped if d > 0) or "none filtered"
         print(f"  {raw} fetched  →  {len(jobs)} to score   ({breakdown})")
-
-        jobs = self.ai_score_batch(jobs)
-
-        jobs = self.rank(jobs)
-        print("AFTER RANK:", len(jobs))
-
-        jobs = self.select(jobs)
-        print("FINAL SELECTED:", len(jobs))
-
-        for j in jobs:
-            print(
-                f"  {j.get('ai_score'):>3}  {j.get('title')} @ {j.get('company')}"
-                f"  |  {j.get('ai_reason', '')}"
-            )
 
         return jobs
 
@@ -241,6 +238,14 @@ class JobFilterPipeline2:
     # =========================================================
 
     def experience_filter(self, jobs):
+        if self.data_roles:
+            profile = self.cfg.config.get("profile", {})
+            max_minimum = float(profile.get("experience_years", 0)) + float(
+                self.cfg.config.get("search", {}).get("experience_flexibility_years", 1)
+            )
+            return [j for j in jobs if j.get("experience_min", 0) <= max_minimum
+                    and not (float(profile.get("experience_years", 0)) < 3
+                             and re.search(r"\b(senior|sr|lead|principal|staff|head|director|chief)\b", j.get("title", ""), re.I))]
         return [
             j for j in jobs
             if j.get("experience_min", 0) <= 4
@@ -269,6 +274,8 @@ class JobFilterPipeline2:
     # =========================================================
 
     def title_filter(self, jobs):
+        if self.data_roles:
+            return [j for j in jobs if self._is_data_role(j)]
         result = []
         for j in jobs:
             title = (j.get("title") or "").lower()
@@ -278,6 +285,27 @@ class JobFilterPipeline2:
                 continue
             result.append(j)
         return result
+
+    @staticmethod
+    def _is_data_role(job):
+        # Word boundaries avoid false matches such as AI in retail or ML in HTML.
+        title = (job.get("title") or "").lower()
+        if re.search(r"\b(sales|recruiter|recruitment|marketing|business development|data entry)\b", title):
+            return False
+        core = (
+            r"\b(data scien\w*|machine[ -]learning|artificial intelligence|"
+            r"ai|ml|gen[ -]?ai|generative ai|llms?|nlp|natural language processing|"
+            r"deep[ -]learning|computer vision|ml[ -]?ops|ai[ -]?ops|"
+            r"data analy\w*|business intelligence|bi (?:developer|engineer|analyst)|"
+            r"data engineer\w*|analytics engineer\w*|decision scien\w*|"
+            r"statistician|applied scien\w*)\b"
+        )
+        if re.search(core, title):
+            return True
+        # Generic engineering/research titles need explicit data/AI skills.
+        generic = re.search(r"\b(software engineer|python developer|research engineer|research scientist|scientist)\b", title)
+        tags = " ".join(job.get("tags", []))
+        return bool(generic and re.search(core, tags))
 
     # =========================================================
     # COMPANY VETO — veto.json-driven
@@ -364,44 +392,28 @@ Be precise — avoid clustering scores at 85 or 60. Use the full range.
 CANDIDATE:
 {user_profile}
 
-SCORING RUBRIC — use the full range, not just 85/60:
-
-90-100 — perfect fit, apply immediately
-  Primary tech is mandatory tag + backend/fullstack role
-  + exp 0-2 yrs + familiar supporting stack. Startup or product company.
-
-75-89 — strong fit, apply
-  Primary tech present (mandatory or optional) + backend lean
-  + exp 0-3 yrs. Maybe one unfamiliar tag but overall good match.
-
-55-74 — decent fit, apply with lower priority
-  Some stack overlap, role is fullstack but not backend-heavy,
-  or exp is 3-4 yrs, or company type unclear.
-
-30-54 — weak, skip unless nothing better
-  Familiar tech present but role is vague, frontend-leaning,
-  or exp mismatch 4-5 yrs.
-
-10-29 — poor match
-  Very little stack overlap, or role is clearly not backend.
-
-0-9 — do not apply
-  Zero stack overlap (Java+Spring only, PHP only, .NET only etc.)
-  OR walk-in / venue / intern role.
+SCORING RUBRIC:
+90-100: Direct match to the candidate's target role, known skills and experience.
+75-89: Strong match to the target domain with a few secondary skill gaps.
+55-74: Related role with useful skill overlap and realistic junior requirements.
+30-54: Weak or ambiguous domain match, or substantial skill/experience gaps.
+10-29: Mostly unrelated work or significant seniority mismatch.
+0-9: Unrelated role or an explicit exclusion in the candidate profile.
 
 RULES:
-- If primary stack tech + 0-2yr backend → 90+, no exceptions
-- Java alongside primary tech is fine — judge the full picture
-- "Software Engineer" with primary stack tags → treat as backend, score 70-85
-- Pure React/Angular/Vue with no backend tags → 0-15
-- DevOps/infra-only with no app dev → 20-40
-- Intern roles → 0
-- Recency: 0-1 days old → mentally add 5 points
+- Follow the candidate's target domain; do not prefer backend roles by default.
+- For data science/AI/ML candidates, include model building, analysis, NLP,
+  computer vision, GenAI/LLM/RAG, ML deployment and relevant data engineering.
+- Python alone does not make a generic backend/web job a data science match.
+- Treat technologies sought for a role separately from skills actually claimed.
+- Never invent experience, qualifications or proficiency in unlisted tools.
+- Judge experience against the saved candidate profile, not a fixed two years.
+- Missing job information lowers confidence; return a concise reason.
 
 Return ONLY valid JSON, no explanation outside it:
 {{
-  "0": {{"score": 92, "reason": "Node.js + MongoDB mandatory, 0-2yr, startup backend"}},
-  "1": {{"score": 0,  "reason": "Java/Spring only, zero overlap"}}
+  "0": {{"score": 92, "reason": "Direct target-role and experience match"}},
+  "1": {{"score": 0,  "reason": "Unrelated role with no domain overlap"}}
 }}
 
 Jobs:

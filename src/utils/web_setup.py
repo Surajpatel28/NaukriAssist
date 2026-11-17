@@ -593,6 +593,7 @@ input[type=range] { flex: 1; accent-color: var(--accent); height: 4px }
       <div class="field">
         <div class="label">Role Focus</div>
         <div class="radio-group" id="role-group">
+          <label class="radio-opt"><input type="radio" name="role" value="data_science"><div><span>Data Science / AI / ML</span><small>Data, models, NLP, GenAI, MLOps</small></div></label>
           <label class="radio-opt sel"><input type="radio" name="role" value="backend" checked><div><span>Backend</span><small>Node.js, Python, Go&hellip;</small></div></label>
           <label class="radio-opt"><input type="radio" name="role" value="fullstack"><div><span>Fullstack</span><small>Backend-leaning</small></div></label>
           <label class="radio-opt"><input type="radio" name="role" value="frontend"><div><span>Frontend</span><small>React, Next.js&hellip;</small></div></label>
@@ -1007,7 +1008,8 @@ function markAcctDone(title, detail) {
     + (detail ? '<div style="font-size:12px;margin-top:2px;opacity:.8">' + detail + '</div>' : '') + '</div>';
   b.className = 'badge';
   b.hidden = false;
-  document.getElementById('acct-tabs').style.display = 'none';
+  // Keep account controls available so a rejected stored session can be replaced.
+  document.getElementById('acct-tabs').style.display = '';
   document.getElementById('s1-next').disabled = false;
   document.getElementById('acct-hint').textContent = '';
 }
@@ -1227,6 +1229,7 @@ document.getElementById('btn-save').addEventListener('click', async () => {
   const tgChat   = document.getElementById('tg-chat').value.trim();
 
   const qMap = {
+    data_science: [['Data Scientist','{l}'],['Machine Learning Engineer','{l}'],['AI Engineer','{l}'],['Data Analyst','{l}'],['NLP Engineer','{l}'],['Computer Vision Engineer','{l}'],['Generative AI Engineer','{l}'],['LLM Engineer','{l}'],['MLOps Engineer','{l}'],['Data Engineer','{l}'],['Machine Learning remote','']],
     backend:   [['Node.js backend developer','{l}'],['Python backend developer','{l}'],['Node.js Developer',''],['Python Developer','']],
     fullstack: [['Full Stack Developer Node.js','{l}'],['Fullstack Engineer Python','{l}'],['MERN Stack Developer','{l}'],['Node.js Full Stack','']],
     frontend:  [['React Developer','{l}'],['Frontend Engineer','{l}'],['Next.js Developer','{l}'],['TypeScript Developer','']],

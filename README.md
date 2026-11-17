@@ -7,8 +7,25 @@
 One of the few fully working Naukri.com API clients — Selenium-free, with an AI-powered automated job application agent.  
 Login, search, score, and apply — all without touching a browser.
 
-**Status:** 🟢 Working — last tested November 2026  
-**Latest fix:** Decoded Naukri's BotGuard `vid` header; login now works reliably without any browser session.
+**Local development version:** November 2026. Live Naukri availability depends on account/session and upstream changes. Historical feature claims below are not a guarantee of current API availability.
+
+Derived from [Traverser25/NopeRi](https://github.com/Traverser25/NopeRi), with local session recovery, persistent history, data/AI role filtering and Windows launcher improvements. Original Git history is preserved.
+
+## Windows quick start and local improvements
+
+Install Python 3.10+ (with the `py` launcher) and Node.js. Run `Finish-Setup.cmd` to create `.venv`, install dependencies and open setup only. Then run `Start-NopeRi.cmd` for one application batch. Use `Update-Naukri-Session.cmd` for setup/session replacement without starting a batch. Keep these launchers inside the repository folder.
+
+Copy `.env.example` to `.env` if configuring credentials manually. Each checkout needs its own account setup; credentials, cookies, application history, caches and logs are deliberately excluded from Git.
+
+The data-science profile filters relevant junior data/AI/ML roles even without paid AI scoring. Saved application history is checked before ranking and batch limits. A rejected session stops the batch; failed submissions are not recorded as successful applications.
+
+Offline regression checks (no Naukri login, applications or paid AI calls):
+
+```powershell
+.venv\Scripts\python.exe -X utf8 -m unittest tests.test_application_history tests.test_data_roles tests.test_session_restore -v
+```
+
+For pytest, install `requirements-dev.txt`. Live smoke tests in `tests/test_api.py` may contact Naukri when credentials are present; they are not part of the offline command above.
 
 ## ✨ Features
 
@@ -39,7 +56,7 @@ Login, search, score, and apply — all without touching a browser.
 **Requirements:** Python 3.10+, Node.js 14+ (for `vid` token generation)
 
 ```bash
-git clone https://github.com/Traverser25/NopeRi.git
+git clone https://github.com/Surajpatel28/NopeRi.git
 cd NopeRi
 pip install -r requirements.txt
 ```
@@ -174,7 +191,7 @@ Edit `user_prompt.md` to tune how the AI scores and filters jobs.
 
 ## 🤖 AI Scoring
 
-When an API key is set, each job is scored 0–100 by the LLM before applying. Jobs below `score_threshold` (default 50) are skipped. Without a key, all fetched jobs go to the apply loop.
+When an API key is set, each job is scored 0–100 by the LLM before applying. Jobs below `score_threshold` (default 50) are skipped. Without a key, role/profile filters still run before the application loop.
 
 | Provider | Env var |
 |---|---|

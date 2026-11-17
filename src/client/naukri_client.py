@@ -1,10 +1,12 @@
 import logging
+import base64
+import json
 import os
 import random
 import time
 import functools
 from io import BytesIO
-from src.client.session import build_session
+from src.client.session import build_session, restore_cookies
 from src.config.constants import *
 from src.exceptions.exceptions import *
 from src.models.models import *
@@ -123,28 +125,68 @@ class NaukriLoginClient:
         client.profile_id = None
         client.cache = {}
 
-        # httpcloak / curl_cffi both expose cookies as a plain dict
-        client.session.cookies["nauk_at"] = nauk_at
-        if nauk_rt:
-            client.session.cookies["nauk_rt"] = nauk_rt
-
         cookies = {"nauk_at": nauk_at}
         if nauk_rt:
             cookies["nauk_rt"] = nauk_rt
+        restore_cookies(client.session, cookies)
         client.naukri_session = NaukriSession(bearer_token=nauk_at, cookies=cookies)
+
+        # Use the browser identifier associated with the imported session.
+        # JWT contents here are metadata only, never proof of authentication.
+        client._browser_user_agent = ''
+        try:
+            payload = nauk_at.split('.')[1]
+            claims = json.loads(base64.urlsafe_b64decode(payload + '=' * (-len(payload) % 4)))
+            agent = claims.get('useragent', '')
+            if isinstance(agent, str) and 0 < len(agent) <= 512 and '\r' not in agent and '\n' not in agent:
+                client._browser_user_agent = agent
+        except (ValueError, IndexError, TypeError, AttributeError):
+            pass
 
         try:
             client.cache["form_key"] = client.get_form_key2()
         except Exception:
             pass
 
+        client.sync_session()
+
         return client
+
+    def sync_session(self):
+        """Keep the Bearer token aligned with cookies rotated by Naukri."""
+        if not self.naukri_session:
+            return False
+        jar = self.session.cookies
+        access = jar.get('nauk_at', '')
+        changed = bool(access and access != self.naukri_session.bearer_token)
+        if access:
+            self.naukri_session.bearer_token = access
+        self.naukri_session.cookies = {
+            name: jar.get(name, '') for name in ('nauk_at', 'nauk_rt') if jar.get(name)
+        }
+        return changed
+
+    def persist_session(self, config_manager):
+        """Save refreshed cookies without changing the user's profile/settings."""
+        self.sync_session()
+        if not self.naukri_session:
+            return
+        config = config_manager.config
+        saved = config.get('session', {})
+        latest = self.naukri_session.cookies
+        updated = {**saved, **latest}
+        if updated != saved:
+            config['session'] = updated
+            config_manager.save(config)
 
     def _build_headers(self, auth=False, extra=None):
         headers = DEFAULT_HEADERS.copy()
+        if getattr(self, '_browser_user_agent', ''):
+            headers['user-agent'] = self._browser_user_agent
         if auth:
             if not self.naukri_session:
                 raise NaukriAuthError("Login required")
+            self.sync_session()
             headers["authorization"] = f"Bearer {self.naukri_session.bearer_token}"
             headers["systemid"] = "Naukri"
         if extra:
@@ -524,6 +566,7 @@ class NaukriLoginClient:
 
     @with_exponential_retry(label="fetch_history")
     def _fetch_history_request(self, page_size, days, page_number, mobile=False):
+        self.sync_session()
         headers = {
             "accept": "application/json",
             "appid": "135" if mobile else "107",

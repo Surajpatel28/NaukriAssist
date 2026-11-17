@@ -30,6 +30,8 @@ venv/
 
 # Logs
 *.log
+.noperi-run.lock
+.test-temp/
 
 # OS files
 .DS_Store
@@ -47,3 +49,13 @@ dist/
 # Coverage (optional)
 .coverage
 htmlcov/
+
+# Release privacy exclusions
+!.env.example
+score_cache*.json
+logs/
+*.db-wal
+*.db-shm
+*.sqlite*
+*session*.json
+*cookie*.json

@@ -1,4 +1,5 @@
 # HTTP
+requests
 curl_cffi==0.15.0
 httpcloak==1.6.1
 

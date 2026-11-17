@@ -3,6 +3,9 @@ import hashlib
 import os
 import sqlite3
 from datetime import datetime
+from pathlib import Path
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 # =============================================================================
@@ -89,7 +92,8 @@ _CSV_FIELDS = ["hash", "job_id", "title", "company", "location", "ai_score", "ap
 
 class AppliedJobsDB:
 
-    def __init__(self, db_path: str = "applied_jobs.db", csv_path: str = "applied_jobs.csv"):
+    def __init__(self, db_path: str = str(_PROJECT_ROOT / "applied_jobs.db"),
+                 csv_path: str = str(_PROJECT_ROOT / "applied_jobs.csv")):
         self.db_path  = db_path
         self.csv_path = csv_path
         self._init_db()

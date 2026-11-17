@@ -27,6 +27,7 @@ from src.client.naukri_client import NaukriLoginClient
 from src.client.job_client import NaukriJobClient
 from src.utils.config_manager import ConfigManager, CONFIG_PATH
 from src.utils.dbhandler import AppliedJobsDB
+from src.exceptions.exceptions import NaukriAuthError
 
 load_dotenv()
 init(autoreset=True)
@@ -402,7 +403,7 @@ def run_agent(cfg: ConfigManager, db: AppliedJobsDB) -> dict:
 
     if nauk_at:
         client = NaukriLoginClient.from_browser_cookies(nauk_at, session.get("nauk_rt",""))
-        print(f"  {Fore.GREEN}Resumed session from stored cookies{Style.RESET_ALL}")
+        print(f"  {Fore.CYAN}Loaded stored cookies; Naukri authentication is not verified yet.{Style.RESET_ALL}")
     else:
         username = os.getenv("NAUKRI_USERNAME", "")
         password = os.getenv("PASSWORD", "")
@@ -413,6 +414,8 @@ def run_agent(cfg: ConfigManager, db: AppliedJobsDB) -> dict:
         client = NaukriLoginClient(username, password)
         client.login()
         print(f"  {Fore.GREEN}Logged in as {Fore.YELLOW}{username}{Style.RESET_ALL}")
+
+    client.persist_session(cfg)
 
     if tg_on and alerts.get("on_scheduler_start", True):
         alert_run_started("manual")
@@ -425,10 +428,20 @@ def run_agent(cfg: ConfigManager, db: AppliedJobsDB) -> dict:
         print(f"\n{Fore.YELLOW}  No jobs found.{Style.RESET_ALL}")
         return {"total":0,"applied":0,"skipped_ext":0,"skipped_dup":0,"failed":0}
 
+    total_fetched = len(jobs)
+    # Exclude history before ranking so old applications cannot fill the batch.
+    previously_applied = sum(db.has_applied(j.job_id, j.company) for j in jobs)
+    jobs = [j for j in jobs if not db.has_applied(j.job_id, j.company)]
+    if previously_applied:
+        print(f"  Skipped {previously_applied} job(s) already in your application history.")
+    if not jobs:
+        print("  All fetched jobs were already applied to. No applications sent.")
+        return {"total": total_fetched, "applied": 0, "skipped_ext": 0,
+                "skipped_dup": previously_applied, "failed": 0}
+    pipeline = JobFilterPipeline2(config_manager=cfg)
     # ── AI filter ─────────────────────────────────────────────────────────────
     if cfg.get_ai_key():
         _section("running AI filter pipeline")
-        pipeline   = JobFilterPipeline2(config_manager=cfg)
         final_jobs = pipeline.run(jobs)
         score_map  = {j["job_id"]: j for j in final_jobs}
         allow      = set(score_map)
@@ -437,7 +450,8 @@ def run_agent(cfg: ConfigManager, db: AppliedJobsDB) -> dict:
         _section("AI filter skipped — no API key set")
         print(f"  {Fore.YELLOW}Set OPENROUTER_API_KEY or OPEN_API_KEY in .env to enable scoring.{Style.RESET_ALL}")
         score_map = {}
-        allow     = {j.job_id for j in jobs}
+        candidates = pipeline.filter_candidates(jobs)
+        allow = {j['job_id'] for j in candidates}
 
     # ── Questionnaire AI ──────────────────────────────────────────────────────
     _qa = None
@@ -452,12 +466,15 @@ def run_agent(cfg: ConfigManager, db: AppliedJobsDB) -> dict:
     allowed    = [j for j in jobs if j.job_id in allow]
     applied    = 0
     skip_ext   = 0
-    skip_dup   = 0
+    skip_dup   = previously_applied
     failed     = 0
 
     _section(f"applying to {len(allowed)} filtered jobs")
 
     for idx, job in enumerate(allowed, 1):
+        if applied >= pipeline.daily_apply_limit:
+            print(f"  Application batch limit reached: {pipeline.daily_apply_limit}")
+            break
         meta   = score_map.get(job.job_id, {})
         score  = meta.get("ai_score")
         reason = meta.get("ai_reason")
@@ -508,6 +525,10 @@ def run_agent(cfg: ConfigManager, db: AppliedJobsDB) -> dict:
             if tg_on and alerts.get("on_apply", True):
                 alert_apply(job.title, job.company, score, job.job_id)
 
+        except NaukriAuthError:
+            # A rejected account session affects the entire batch.
+            client.persist_session(cfg)
+            raise
         except Exception as e:
             print(f"  {Fore.RED}Status  :  Failed — {e}{Style.RESET_ALL}")
             failed += 1
@@ -516,9 +537,10 @@ def run_agent(cfg: ConfigManager, db: AppliedJobsDB) -> dict:
 
         time.sleep(3)
 
+    client.persist_session(cfg)
     # ── Summary ───────────────────────────────────────────────────────────────
     stats = {
-        "total":       len(jobs),
+        "total":       total_fetched,
         "applied":     applied,
         "skipped_ext": skip_ext,
         "skipped_dup": skip_dup,
@@ -565,6 +587,7 @@ if __name__ == "__main__":
         from src.utils.web_setup import launch as web_launch
         web_launch()
         cfg._config = None  # reload after wizard wrote config.json
+        load_dotenv(override=True)  # use credentials saved by the wizard in this run
         if args.setup:
             sys.exit(0)
 
@@ -585,4 +608,13 @@ if __name__ == "__main__":
         if count:
             print(f"  {Fore.CYAN}Migrated {count} record(s) from CSV → SQLite{Style.RESET_ALL}")
 
-    run_agent(cfg, db)
+    try:
+        run_agent(cfg, db)
+    except NaukriAuthError as error:
+        print(f"\n{error}")
+        print("\nNaukri rejected your account session. The batch has stopped.")
+        print("Failed jobs have not been added to application history.")
+        print("Sign in to Naukri in your browser, then use Update Naukri Session on your Desktop")
+        print("to paste fresh nauk_at (and nauk_rt if available) cookie values.")
+        print("Then use Start NopeRi again. Existing application history will be retained.")
+        sys.exit(3)

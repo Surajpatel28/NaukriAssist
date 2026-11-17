@@ -130,7 +130,9 @@ class NaukriJobClient:
             title=raw.get("title") or raw.get("jobTitle") or "N/A",
             company=raw.get("companyName") or raw.get("company") or "N/A",
             location=location,
-            experience=raw.get("experienceText") or raw.get("experience") or "N/A",
+            experience=raw.get("experienceText") or raw.get("experience") or next(
+                (p.get("label") for p in raw.get("placeholders", []) if p.get("type") == "experience"), "N/A"
+            ),
             salary=raw.get("salaryDetail") or raw.get("salary") or "Not disclosed",
             posted_date=raw.get("footerPlaceholderLabel") or raw.get("postedDate") or "N/A",
             apply_link=raw.get("jdURL") or f"https://www.naukri.com/job-listings-{raw.get('jobId', '')}",
@@ -266,10 +268,10 @@ class NaukriJobClient:
 
         if res.status_code in (401, 403):
             try:
-                msg = res.json().get("message", "Auth failed")
+                msg = res.json().get("message") or "Job-details authentication rejected"
             except Exception:
                 msg = res.text
-            raise NaukriAuthError(msg)
+            raise NaukriAuthError(msg, status_code=res.status_code)
 
         if not res.ok:
             raise NaukriParseError(f"Job details fetch failed: {res.status_code} — {res.text}")
@@ -342,10 +344,10 @@ class NaukriJobClient:
 
         if res.status_code in (401, 403):
             try:
-                msg = res.json().get("message", "Auth failed")
+                msg = res.json().get("message") or "Application authentication rejected"
             except Exception:
                 msg = res.text
-            raise NaukriAuthError(msg)
+            raise NaukriAuthError(msg, status_code=res.status_code)
 
         if not res.ok:
             raise NaukriParseError(f"Apply failed: {res.status_code} — {res.text}")

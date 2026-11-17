@@ -196,6 +196,29 @@ class ConfigManager:
         )
         primary = stack[0] if stack else "Node.js"
 
+        if p.get("role_focus") == "data_science":
+            return (
+                "## Candidate Profile\n\n"
+                "- Target: Data Science, Artificial Intelligence, Machine Learning and related roles.\n"
+                f"- Saved experience: {exp} year(s).\n"
+                f"- Saved skills: {', '.join(stack) if stack else 'Not provided; do not invent skills'}.\n"
+                f"- Preferred locations: {loc_str}.\n"
+                "- Primary roles: Data Scientist, ML Engineer, AI Engineer, Applied Scientist.\n"
+                "- Related roles: Data Analyst, BI, NLP, Computer Vision, Deep Learning, GenAI, "
+                "LLM/RAG, MLOps, Data Engineer and Analytics Engineer.\n"
+                "- Generic Python/software roles qualify only when they explicitly involve data/AI/ML.\n"
+                "- Exclude unrelated web/backend, frontend, mobile, sales, marketing, recruiting and data-entry work.\n"
+                "- Prefer junior/associate/entry-level roles compatible with saved experience.\n"
+                "- Do not assume experience in a tool merely because a target job requires it.\n\n"
+                "## Scoring Guide\n\n"
+                "- 85-100: Strong data/AI/ML domain, skill and experience fit.\n"
+                "- 65-84: Good domain fit with secondary skill gaps.\n"
+                "- 50-64: Related analytical or data-engineering role with realistic requirements.\n"
+                "- 0-49: Unrelated work or substantial skill/seniority mismatch.\n"
+                "- Do not penalize data science, ML, NLP, CV, GenAI or MLOps as unrelated domains.\n"
+                "- Evaluate all companies on role fit; do not favor a company type by default.\n"
+            )
+
         return (
             f"## My Profile\n\n"
             f"- **Role focus:** {role} developer\n"
