@@ -415,7 +415,12 @@ def run_agent(cfg: ConfigManager, db: AppliedJobsDB) -> dict:
         client.login()
         print(f"  {Fore.GREEN}Logged in as {Fore.YELLOW}{username}{Style.RESET_ALL}")
 
-    client.persist_session(cfg)
+    # Check the private account before searching, AI calls or any applications.
+    try:
+        client.verify_account_session()
+    finally:
+        client.persist_session(cfg)
+    print("  Naukri account authentication verified.")
 
     if tg_on and alerts.get("on_scheduler_start", True):
         alert_run_started("manual")
@@ -614,7 +619,7 @@ if __name__ == "__main__":
         print(f"\n{error}")
         print("\nNaukri rejected your account session. The batch has stopped.")
         print("Failed jobs have not been added to application history.")
-        print("Sign in to Naukri in your browser, then use Update Naukri Session on your Desktop")
+        print("Sign in to Naukri in your browser, then run Update-Naukri-Session.cmd in this folder")
         print("to paste fresh nauk_at (and nauk_rt if available) cookie values.")
         print("Then use Start NopeRi again. Existing application history will be retained.")
         sys.exit(3)

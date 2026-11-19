@@ -166,6 +166,27 @@ class NaukriLoginClient:
         }
         return changed
 
+    def verify_account_session(self):
+        """Verify a private account endpoint; a public page cannot prove login."""
+        response = self.session.get(
+            DASHBOARD_URL, headers=self._build_headers(auth=True), timeout=15,
+        )
+        self.sync_session()
+        if response.status_code in (401, 403):
+            raise NaukriAuthError(
+                "Saved session rejected by account verification. Sign in to Naukri "
+                "and run Update-Naukri-Session.cmd to import fresh cookies.",
+                status_code=response.status_code,
+            )
+        if not response.ok:
+            raise NaukriParseError(f"Account verification failed: HTTP {response.status_code}")
+        try:
+            data = response.json()
+        except ValueError:
+            raise NaukriParseError("Account verification did not return JSON") from None
+        if not isinstance(data, dict) or not data:
+            raise NaukriParseError("Account verification returned an invalid response")
+
     def persist_session(self, config_manager):
         """Save refreshed cookies without changing the user's profile/settings."""
         self.sync_session()

@@ -119,7 +119,7 @@ def main() -> int:
         result = run_logged([], env)
         if result == 3:
             print('\nNaukri rejected the saved session. The batch stopped at the first authentication error.')
-            print('Open Update Naukri Session on your Desktop, save fresh cookies, then start again.')
+            print('Run Update-Naukri-Session.cmd in this folder, save fresh cookies, then start again.')
         elif result:
             print('\nRun stopped with an error. Review the output and saved log.')
             print('If your session expired, run Finish-Setup.cmd to update it.')
