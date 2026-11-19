@@ -107,7 +107,7 @@ class NaukriLoginClient:
         self.cache = {}
 
     @classmethod
-    def from_browser_cookies(cls, nauk_at: str, nauk_rt: str = "") -> "NaukriLoginClient":
+    def from_browser_cookies(cls, nauk_at: str, nauk_rt: str = "", *, warmup: bool = True) -> "NaukriLoginClient":
         """
         Build an authenticated client from browser cookies — no login request needed.
 
@@ -143,10 +143,11 @@ class NaukriLoginClient:
         except (ValueError, IndexError, TypeError, AttributeError):
             pass
 
-        try:
-            client.cache["form_key"] = client.get_form_key2()
-        except Exception:
-            pass
+        if warmup:
+            try:
+                client.cache["form_key"] = client.get_form_key2()
+            except Exception:
+                pass
 
         client.sync_session()
 

@@ -50,6 +50,9 @@ dist/
 .coverage
 htmlcov/
 
+# Browser sign-in state (contains session credentials)
+.browser-profile/
+
 # Release privacy exclusions
 !.env.example
 score_cache*.json

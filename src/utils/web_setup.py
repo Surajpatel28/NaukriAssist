@@ -537,6 +537,8 @@ input[type=range] { flex: 1; accent-color: var(--accent); height: 4px }
     </div>
     <div class="card-body">
       <div id="acct-badge" hidden></div>
+      <button class="btn btn-primary" id="btn-browser-login" style="width:100%;margin-bottom:12px">Sign in with browser (automatic setup)</button>
+      <div class="msg info" id="browser-login-msg" hidden></div>
       <div id="acct-tabs">
         <div class="tabs">
           <div class="tab active" data-tab="login">Password login</div>
@@ -1014,6 +1016,27 @@ function markAcctDone(title, detail) {
   document.getElementById('acct-hint').textContent = '';
 }
 
+document.getElementById('btn-browser-login').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-browser-login');
+  const msg = document.getElementById('browser-login-msg');
+  btn.disabled = true;
+  setMsg(msg, 'Complete sign-in in the Naukri browser window. This page will update automatically.', 'info');
+  try {
+    const res = await post('/api/browser-login', {});
+    if (!res.ok) throw new Error(res.error || 'Sign-in did not complete. Try again.');
+    const cfg = await fetch('/api/config').then(r => r.json());
+    storedSession = cfg.session || {};
+    accountType = 'cookies';
+    markAcctDone('Browser session verified and saved', 'No cookie copying required.');
+    msg.hidden = true;
+  } catch (error) {
+    msg.textContent = error.message;
+    msg.className = 'msg err'; msg.hidden = false;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 document.getElementById('btn-login').addEventListener('click', async () => {
   const btn   = document.getElementById('btn-login');
   const msg   = document.getElementById('login-msg');
@@ -1430,6 +1453,7 @@ class _Handler(BaseHTTPRequestHandler):
         body = self._body()
         if   self.path == '/api/login':        self._login(body)
         elif self.path == '/api/cookies':      self._cookies(body)
+        elif self.path == '/api/browser-login': self._browser_login()
         elif self.path == '/api/save':         self._save(body)
         elif self.path == '/api/install-cron': self._install_cron(body)
         elif self.path == '/api/done':
@@ -1475,6 +1499,14 @@ class _Handler(BaseHTTPRequestHandler):
             self._json({'ok': True, 'nauk_at': nauk_at, 'nauk_rt': nauk_rt})
         except Exception as e:
             self._json({'ok': False, 'error': str(e)})
+
+    def _browser_login(self):
+        try:
+            from src.utils.browser_session import connect_browser
+            connected = connect_browser() == 0
+            self._json({'ok': connected, 'error': '' if connected else 'Sign-in did not complete. Please try again.'})
+        except Exception:
+            self._json({'ok': False, 'error': 'Browser sign-in failed. Run Finish-Setup.cmd and try again.'})
 
     def _cookies(self, body: dict):
         nauk_at = body.get('nauk_at', '').strip()

@@ -1,3 +1,6 @@
+# Browser-based sign-in and automatic session capture
+playwright>=1.51,<2
+
 # HTTP
 requests
 curl_cffi==0.15.0

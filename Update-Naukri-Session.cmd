@@ -2,7 +2,7 @@
 cd /d "%~dp0"
 set "PYTHONUTF8=1"
 if not exist ".venv\Scripts\python.exe" goto missing
-".venv\Scripts\python.exe" desktop_launcher.py --setup
+".venv\Scripts\python.exe" desktop_launcher.py --browser-login
 set "setupResult=%ERRORLEVEL%"
 pause
 exit /b %setupResult%

@@ -85,6 +85,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true', help='Check startup without login or applications')
     parser.add_argument('--setup', action='store_true', help='Update account/profile settings without applying')
+    parser.add_argument('--browser-login', action='store_true', help='Sign in normally and capture cookies automatically')
     args = parser.parse_args()
     os.chdir(ROOT)
     env = child_environment()
@@ -110,11 +111,25 @@ def main() -> int:
             print('Account setup needed.' if setup_required else 'Saved account credentials/session found.')
             print('No login or applications were attempted.')
             return 0
+        if args.browser_login:
+            return subprocess.call(
+                [sys.executable, '-X', 'utf8', '-m', 'src.utils.browser_session'], cwd=ROOT, env=env,
+            )
         if args.setup:
             print('Opening setup only. No application batch will be started.', flush=True)
             return run_logged(['--setup'], env)
         if setup_required:
             print('Complete the account setup in your browser. Applying will begin after you save and close it.')
+        # Refresh authentication interactively before starting the one requested batch.
+        # First-run profile setup still happens through the existing wizard.
+        if not setup_required:
+            connected = subprocess.call(
+                [sys.executable, '-X', 'utf8', '-m', 'src.utils.browser_session', '--ensure-session'],
+                cwd=ROOT, env=env,
+            )
+            if connected:
+                print('Sign-in did not complete. No application batch was started.')
+                return connected
         print('Starting one application batch with your saved search and profile settings.', flush=True)
         result = run_logged([], env)
         if result == 3:

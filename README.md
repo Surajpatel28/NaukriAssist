@@ -11,6 +11,16 @@ Login, search, score, and apply — all without touching a browser.
 
 Derived from [Traverser25/NopeRi](https://github.com/Traverser25/NopeRi), with local session recovery, persistent history, data/AI role filtering and Windows launcher improvements. Original Git history is preserved.
 
+## Automatic browser sign-in
+
+`Update-Naukri-Session.cmd` opens a dedicated Chrome window. Sign in normally and complete any OTP/CAPTCHA; NaukriAssist captures and validates the Naukri cookies and saves them locally. No DevTools or manual cookie copying is required. This command never submits job applications.
+
+`Start-NopeRi.cmd` reuses a valid saved session. With an existing profile, it opens browser sign-in automatically if the account rejects that session, then starts the requested batch only after verification succeeds. Complete the first-run profile wizard when installing on a new machine.
+
+Install dependencies with `Finish-Setup.cmd`. Chrome must be installed; Edge users can run `python -m src.utils.browser_session --channel msedge`. The separate `.browser-profile/` folder and `config.json` contain private session data and are excluded from Git. Keep this local browser profile to reuse sign-in across runs; websites may still require reauthentication. The tool does not read your regular Chrome profile, bypass login/CAPTCHA or guarantee that Naukri accepts automation.
+
+Browser implementation reference: [Playwright persistent contexts](https://playwright.dev/python/docs/api/class-browsertype#browser-type-launch-persistent-context).
+
 ## Windows quick start and local improvements
 
 Install Python 3.10+ (with the `py` launcher) and Node.js. Run `Finish-Setup.cmd` to create `.venv`, install dependencies and open setup only. Then run `Start-NopeRi.cmd` for one application batch. Use `Update-Naukri-Session.cmd` for setup/session replacement without starting a batch. Keep these launchers inside the repository folder.
